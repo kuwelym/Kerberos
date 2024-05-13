@@ -37,7 +37,7 @@ def encrypt_aes_message(plaintext, aes_key):
     return cipher.encrypt(padded_plaintext)
 
 def handle_client_request(client_socket, tgs_private_key, tgs_public_key):
-    packet = client_socket.recv(1024).split(b",,,")
+    packet = client_socket.recv(1024).split(b"||")
 
     if len(packet) != 3:
         print("Error: Invalid packet format")
@@ -45,7 +45,7 @@ def handle_client_request(client_socket, tgs_private_key, tgs_public_key):
 
     requested_server_id, timestamp, encrypted_ticket1 = packet
 
-    decrypted_ticket = decrypt_rsa_message(encrypted_ticket1, tgs_private_key).split(b",,,")
+    decrypted_ticket = decrypt_rsa_message(encrypted_ticket1, tgs_private_key).split(b"||")
 
     if len(decrypted_ticket) != 2:
         print("Error: Invalid ticket format")
@@ -53,7 +53,7 @@ def handle_client_request(client_socket, tgs_private_key, tgs_public_key):
 
     username, client_aes_key = decrypted_ticket
 
-    print("Client", username.decode(), "requesting access to server-" + requested_server_id.decode())
+    print("Client", username.decode(), "requesting access to \"" + requested_server_id.decode()+"\" server.")
 
     decrypted_timestamp = decrypt_aes_message(timestamp, client_aes_key)
     decrypted_timestamp = datetime.strptime(decrypted_timestamp.decode(), "%Y-%m-%d %H:%M:%S.%f")
@@ -68,17 +68,17 @@ def handle_client_request(client_socket, tgs_private_key, tgs_public_key):
 
     server_session_key = generate_random_aes_key()
 
-    server_ticket = requested_server_id + b",,," + server_session_key
+    server_ticket = requested_server_id + b"||" + server_session_key
     encrypted_server_ticket = encrypt_aes_message(server_ticket, client_aes_key)
 
-    user_ticket = username + b",,," + server_session_key
+    user_ticket = username + b"||" + server_session_key
     encrypted_user_ticket = encrypt_rsa_message(user_ticket, tgs_public_key)
 
-    response_packet = encrypted_server_ticket + b",,," + encrypted_user_ticket
+    response_packet = encrypted_server_ticket + b"||" + encrypted_user_ticket
 
     sleep(1.0)
     client_socket.send(response_packet)
-    print("Tickets sent to client,", username.decode(), ". Connection closed.")
+    print("Tickets sent to client, "+ username.decode() + ". Connection closed.")
     client_socket.close()
 
 def main():

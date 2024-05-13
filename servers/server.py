@@ -17,14 +17,14 @@ def verify_ticket(client_socket, private_key_file):
     try:
         tgs_private_key = load_private_key(private_key_file)
 
-        packet = client_socket.recv(1024).split(b",,,")
+        packet = client_socket.recv(1024).split(b"||")
 
         if len(packet) != 2:
             raise ValueError("Invalid packet format")
 
         timestamp, encrypted_ticket = packet
 
-        ticket_data = decrypt_ticket(encrypted_ticket, tgs_private_key).split(b",,,")
+        ticket_data = decrypt_ticket(encrypted_ticket, tgs_private_key).split(b"||")
 
         if len(ticket_data) != 2:
             raise ValueError("Invalid ticket format")

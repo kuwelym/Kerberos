@@ -4,24 +4,29 @@ from Crypto.Cipher import AES
 from Crypto.Util.Padding import pad, unpad
 
 def take_input():
-    username = input("Enter username: ")
-    password = input("Enter your 16-digit password: ").encode()
+    username = input("Enter your username: ")
+    password = input("Enter your password(16-digits): ").encode()
+    tgs_id = input("Enter TGS ID: ")
     secret_data = b'this is  testing'
     session_key = generate_session_key(password, secret_data)
-    return username, session_key
+    return username, session_key, tgs_id
 
 def generate_session_key(password, data):
     cipher = AES.new(password, AES.MODE_ECB)
     return cipher.encrypt(data)
 
-def connect_to_authentication_server(username):
+def connect_to_authentication_server(username, tgs_id):
     authentication_server_address = socket.gethostname()
     authentication_server_port = 2000
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((authentication_server_address, authentication_server_port))
-    client_socket.send(username.encode())
+
+    # Send username, TGS ID, and timestamp to authentication server
+    timestamp = str(datetime.utcnow())
+    request_data = f"{username}||{tgs_id}||{timestamp}".encode()
+
+    client_socket.send(request_data)
     response  = client_socket.recv(1024)
-    client_socket.send("DONE".encode())
     client_socket.close()
     return response 
 
@@ -36,7 +41,7 @@ def connect_to_ticket_granting_server(packet, key1):
         print("Invalid credentials!")
         exit(0)
     print("Authenticated by authentication server.")
-    decrypted_packet_parts = decrypted_packet.split(b",,,")
+    decrypted_packet_parts = decrypted_packet.split(b"||")
     if len(decrypted_packet_parts) != 2:
         print("Invalid credentials!")
         exit(0)
@@ -44,7 +49,7 @@ def connect_to_ticket_granting_server(packet, key1):
     timestamp = str(datetime.utcnow()).encode()
     timestamp_encrypted = encrypt_with_key(session_key, timestamp)
     server_id = input("Enter serverID: ").encode()
-    packet  = server_id + b",,," + timestamp_encrypted + b",,," + ticket_to_tgs
+    packet  = server_id + b"||" + timestamp_encrypted + b"||" + ticket_to_tgs
     ticket_granting_server_address = socket.gethostname()
     ticket_granting_server_port = 3000
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -62,16 +67,16 @@ def encrypt_with_key(key, data):
     return cipher.encrypt(padded_data)
 
 def connect_to_server(packet, session_key):
-    packet_parts = packet.split(b",,,")
+    packet_parts = packet.split(b"||")
     if len(packet_parts) != 2:
         print("Invalid credentials!")
         exit(0)
     ticket_to_server, ticket_to_client = packet_parts
     ticket_to_server_decrypted = decrypt_packet(ticket_to_server, session_key)
-    _, server_key = ticket_to_server_decrypted.split(b",,,")
+    _, server_key = ticket_to_server_decrypted.split(b"||")
     timestamp_request = str(datetime.utcnow()).encode()
     timestamp_request_encrypted = encrypt_with_key(server_key, timestamp_request)
-    packet = timestamp_request_encrypted + b",,," + ticket_to_client
+    packet = timestamp_request_encrypted + b"||" + ticket_to_client
     server_address = socket.gethostname()
     server_port = 4000
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -102,8 +107,8 @@ def communicate_with_server(client_socket, server_key):
     client_socket.close()
 
 def main():
-    username, key1 = take_input()
-    AS_response = connect_to_authentication_server(username)
+    username, key1, tgs_id = take_input()
+    AS_response = connect_to_authentication_server(username, tgs_id)
     TGS_response, session_key = connect_to_ticket_granting_server(AS_response, key1)
     reply, client_socket, server_key = connect_to_server(TGS_response, session_key)
     if reply == "True":
